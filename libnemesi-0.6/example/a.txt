@@ -1,0 +1,142 @@
+MPlayer dev-SVN-r27468-4.1.2 (C) 2000-2008 MPlayer Team
+CPU: Intel(R) Pentium(R) Dual  CPU  E2140  @ 1.60GHz (Family: 6, Model: 15, Stepping: 13)
+CPUflags:  MMX: 1 MMX2: 1 3DNow: 0 3DNow2: 0 SSE: 1 SSE2: 1
+Compiled with runtime CPU detection.
+get_path('codecs.conf') -> '/root/.mplayer/codecs.conf'
+Reading /root/.mplayer/codecs.conf: Can't open '/root/.mplayer/codecs.conf': No such file or directory
+Reading /etc/mplayer/codecs.conf: Can't open '/etc/mplayer/codecs.conf': No such file or directory
+Using built-in default codecs.conf.
+Configuration: --prefix=/usr --bindir=/usr/bin --datadir=/usr/share/mplayer --mandir=/usr/share/man --confdir=/etc/mplayer --libdir=/usr/lib --codecsdir=/usr/lib/codecs --disable-faac-lavc --disable-mp3lame-lavc --disable-x264-lavc --enable-largefiles --enable-unrarexec --disable-termcap --disable-bitmap-font --enable-lirc --enable-joystick --disable-nemesi --disable-smb --disable-dvdread-internal --disable-libdvdcss-internal --enable-menu --disable-faad-internal --disable-tremor-internal --disable-libamr_nb --disable-libamr_wb --disable-mad --enable-xvmc --disable-directfb --disable-svga --disable-arts --disable-esd --disable-jack --disable-openal --enable-runtime-cpudetection --target=i386-linux --language=all --with-fribidi-config=pkg-config fribidi --with-xvmclib=XvMCW
+CommandLine: '-V' 'dump_nms.96'
+init_freetype
+Using MMX (with tiny bit MMX2) Optimized OnScreenDisplay
+get_path('fonts') -> '/root/.mplayer/fonts'
+Using nanosleep() timing
+get_path('input.conf') -> '/root/.mplayer/input.conf'
+Can't open input config file /root/.mplayer/input.conf: No such file or directory
+Parsing input config file /etc/mplayer/input.conf
+Input config file /etc/mplayer/input.conf parsed: 89 binds
+Setting up LIRC support...
+get_path('dump_nms.96.conf') -> '/root/.mplayer/dump_nms.96.conf'
+
+Playing dump_nms.96.
+get_path('sub/') -> '/root/.mplayer/sub/'
+[file] File size is 26799583 bytes
+STREAM: [file] dump_nms.96
+STREAM: Description: File
+STREAM: Author: Albeu
+STREAM: Comment: based on the code from ??? (probably Arpi)
+LAVF_check: no clue about this gibberish!
+Checking for YUV4MPEG2
+ASF_check: not ASF guid!
+Checking for NuppelVideo
+Checking for REAL
+Checking for SMJPEG
+Searching demuxer type for filename dump_nms.96 ext: .96
+Checking for Nullsoft Streaming Video
+Checking for MOV
+Checking for VIVO
+header block 1 size: 0
+AVS: avs_check_file - attempting to open file dump_nms.96
+AVS: File is too big, aborting...
+Checking for PVA
+Checking for MPEG-TS...
+TRIED UP TO POSITION 67236, FOUND 47, packet_size= 0, SEEMS A TS? 0
+Checking for LMLM4 Stream Format
+Invalid packet in LMLM4 stream: ch=0 size=1100619770
+LMLM4 Stream Format not found
+sync_mpeg_ps: seems to be MP3 stream...
+MPEG Stream reached EOF
+ds_fill_buffer: EOF reached (stream: video)  
+MPEG packet stats: p100: 0  p101: 0 p1B6: 0 p12x: 0 sli: 32 a: 0 b: 0 c: 0 idr: 1 sps: 0 pps: 0 PES: 0  MP3: 399, synced: 0
+Not MPEG System Stream format... (maybe Transport Stream?)
+stream_seek: WARNING! Can't seek to 0x0 !
+sync_mpeg_ps: seems to be MP3 stream...
+MPEG Stream reached EOF
+ds_fill_buffer: EOF reached (stream: video)  
+MPEG packet stats: p100: 0  p101: 0 p1B6: 0 p12x: 0 sli: 31 a: 0 b: 0 c: 0 idr: 1 sps: 0 pps: 0 PES: 0  MP3: 399, synced: 0
+Not MPEG System Stream format... (maybe Transport Stream?)
+stream_seek: WARNING! Can't seek to 0x0 !
+==> Found video stream: 0
+ds_fill_buffer: EOF reached (stream: video)  
+LAVF_check: no clue about this gibberish!
+Checking for DV
+RAWDV file format detected.
+demux_open_rawdv() end_pos 26799583
+==> Found video stream: 0
+demux_open_rawdv() frame_size: 120000 w: 720 h: 480 dif_seq: 10 system: 1
+demux_open_rawdv() seek to 0, size: 120000, dv_dec->frame_size: 120000
+==> Found audio stream: 0
+demux_open_rawdv() chan: 0 samplerate: 0
+VIDEO:  [DVSD]  720x480  24bpp  29.970 fps    0.0 kbps ( 0.0 kbyte/s)
+[V] filefmt:22  fourcc:0x44535644  size:720x480  fps:29.970  ftime:=0.0334
+get_path('sub/') -> '/root/.mplayer/sub/'
+X11 opening display: :0.0
+vo: X11 color mask:  FFFFFF  (R:FF0000 G:FF00 B:FF)
+vo: X11 running at 1440x900 with depth 24 and 32 bpp (":0.0" => local display)
+[x11] Detected wm supports NetWM.
+[x11] Detected wm supports FULLSCREEN state.
+[x11] Detected wm supports ABOVE state.
+[x11] Detected wm supports BELOW state.
+[x11] Current fstype setting honours FULLSCREEN ABOVE BELOW X atoms
+==========================================================================
+Opening video decoder: [dshow] DirectShow video codecs
+Win32 LoadLibrary failed to load: qdv.dll, /usr/lib/codecs/qdv.dll, /usr/lib/win32/qdv.dll, /usr/local/lib/win32/qdv.dll
+Warning: DS_Filter() could not open DirectShow DLL.  (DLL=qdv.dll)
+Failed to create DirectShow filter
+You need to upgrade/install the binary codecs package.
+Go to http://www.mplayerhq.hu/dload.html
+VDecoder init failed :(
+Opening video decoder: [ffmpeg] FFmpeg's libavcodec codec family
+INFO: libavcodec init OK!
+Selected video codec: [ffdv] vfm: ffmpeg (FFmpeg DV decoder)
+==========================================================================
+==========================================================================
+Opening audio decoder: [libdv] Raw DV Audio Decoder
+dec_audio: Allocating 15552 + 65536 = 81088 bytes for output buffer.
+Uninit audio: libdv
+ADecoder init failed :(
+Opening audio decoder: [ffmpeg] FFmpeg/libavcodec audio decoders
+dec_audio: Allocating 192000 + 65536 = 257536 bytes for output buffer.
+FFmpeg's libavcodec audio codec
+ADecoder init failed :(
+Read DOCS/HTML/en/codecs.html!
+Audio: no sound
+Freeing 0 unused audio chunks.
+Starting playback...
+[ffmpeg] aspect_ratio: 0.000000
+VDec: vo config request - 720 x 480 (preferred colorspace: Planar 411P)
+Trying filter chain: vo
+Could not find matching colorspace - retrying with -vf scale...
+Opening video filter: [scale]
+SwScale params: -1 x -1 (-1=no scaling)
+Trying filter chain: scale vo
+VDec: using Planar 411P as output csp (no 0)
+Movie-Aspect is undefined - no prescaling applied.
+VO Config (720x480->720x480,flags=0,'MPlayer',0x50313134)
+SwScaler: reducing / aligning filtersize 1 -> 4
+SwScaler: reducing / aligning filtersize 5 -> 4
+SwScaler: reducing / aligning filtersize 1 -> 1
+SwScaler: reducing / aligning filtersize 1 -> 1
+[swscaler @ 0x869f6a0]BICUBIC scaler, from yuv411p to rgb32 using MMX2
+[swscaler @ 0x869f6a0]using 4-tap MMX scaler for horizontal luminance scaling
+[swscaler @ 0x869f6a0]using 4-tap MMX scaler for horizontal chrominance scaling
+[swscaler @ 0x869f6a0]using n-tap MMX scaler for vertical scaling (BGR)
+[swscaler @ 0x869f6a0]using MMX YV12->BGR32 Converter
+[swscaler @ 0x869f6a0]720x480 -> 720x480
+[swscaler @ 0x869f6a0]Lum srcW=720 srcH=480 dstW=720 dstH=480 xInc=65536 yInc=65536
+[swscaler @ 0x869f6a0]Chr srcW=180 srcH=480 dstW=360 dstH=480 xInc=32768 yInc=65536
+REQ: flags=0x4C7  req=0x0  
+VO: [x11] 720x480 => 720x480 BGRA 
+VO: Description: X11 ( XImage/Shm )
+VO: Author: Aaron Holtzman <aholtzma@ess.engr.uvic.ca>
+Sharing memory.
+*** [scale] Allocating mp_image_t, 736x480x12bpp YUV planar, 529920 bytes
+*** [vo] Allocating mp_image_t, 720x480x32bpp BGR packed, 1382400 bytes
+Unicode font: 34934 glyphs.
+Unicode font: 34934 glyphs.
+V:   0.0   1/  1 ??% ??% ??,?% 0 0                                                                                                                                               *** [scale] Allocating mp_image_t, 736x480x12bpp YUV planar, 529920 bytes
+V:   0.0   2/  2 ??% ??% ??,?% 0 0                                                                                                                                               Uninit video: ffmpeg
+vo: uninit ...
+
+Exiting... (Quit)

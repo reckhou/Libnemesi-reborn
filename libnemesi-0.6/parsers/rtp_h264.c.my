@@ -1,0 +1,446 @@
+/*
+ * rtp_h264.c
+ *
+ *   H264 depacketizer, as RFC 3984 (partially implemented).
+ *
+ * lchen@caton.com.cn
+ * 2010.10
+ */
+#include "rtpparser.h"
+#include "rtp_utils.h"
+#include <math.h>
+
+typedef struct nalu_buf_s {
+    uint8_t     *data;      /* buffer to save NALUs */
+    long        len;        /* NALUs' size */
+    long        alloc_size; /* allocated size for NALU buffer */
+    uint32_t    timestamp;  /* timestamp of the NALU */
+} nalu_buf_t;
+
+typedef struct rtp_h264_s {
+    nalu_buf_t  nalu;      /* NAL Units */
+    uint8_t     *conf;      /* config data */
+    size_t      conf_len;   /* config data length */
+} rtp_h264_t;
+
+static rtpparser_info h264_served = {
+    -1,                     /* payload type */
+    {"H264", NULL},         /* MIME type list */
+};
+
+static int parse_sps_pps(const char *from, uint8_t **data, size_t *len)
+{
+    char string[1024], *token;
+    int nleft, ndec;
+
+    if (strlen(from) >= sizeof(string) - 1) {
+        fprintf(stderr, "%s: too big string to parse\n", __FUNCTION__);
+        return -1;
+    }
+
+    snprintf(string, sizeof(string), from);
+
+    // base64 need 4/3 bigger, and plus 2 is just for safe
+    nleft = (strlen(from) / 3 + 3) * 4 * 2;
+    if ((*data = calloc(1, nleft)) == NULL) {
+        fprintf(stderr, "%s: no memory\n", __FUNCTION__);
+        return -1;
+    }
+
+    /* different token is separated by ',' */
+    if ((token = strtok(string, ",")) == NULL) {
+        fprintf(stderr, "%s: nothing to parse\n", __FUNCTION__);
+        free(*data);
+        *data = NULL;
+        return -1;
+    }
+
+    if ((ndec = nms_base64_decode(*data, token, nleft)) == -1) {
+        fprintf(stderr, "%s: base64 decode error\n", __FUNCTION__);
+        free(*data);
+        *data = NULL;
+        return -1;
+    }
+    nleft -= ndec;
+    *len += ndec;
+
+    while ((token = strtok(NULL, ",")) != NULL) {
+        if ((ndec = nms_base64_decode(*data + *len, token, nleft)) == -1) {
+            fprintf(stderr, "%s: base64 decode error\n", __FUNCTION__);
+            free(*data);
+            *data = NULL;
+            return -1;
+        }
+        nleft -= ndec;
+        *len += ndec;
+    }
+
+    return 0;
+}
+
+static int add_nalu_data(nalu_buf_t *nalu, const uint8_t *data, size_t len)
+{
+    uint8_t start_code[4] = {0x00, 0x00, 0x00, 0x01};
+    int ret;
+
+    if (nalu->len == 0) {
+        ret = nms_alloc_data(&nalu->data, &nalu->alloc_size,
+                sizeof(start_code) + len);
+    } else {
+        ret = nms_alloc_data(&nalu->data, &nalu->alloc_size,
+                nalu->len + sizeof(start_code) + len);
+    }
+
+    if (ret != 0) {
+        fprintf(stderr, "%s: no memory!\n", __FUNCTION__);
+        return -1;
+    }
+
+    if (nalu->len == 0)
+        nms_append_incr(nalu->data, &nalu->len, start_code, sizeof(start_code));
+
+    nms_append_incr(nalu->data, &nalu->len, (uint8_t *)data, len);
+    return 0;
+}
+
+static void consume_nalu(nalu_buf_t *nalu, rtp_frame *frame)
+{
+    /* output frame for consume */
+    frame->data = nalu->data;
+    frame->len = nalu->len;
+    nalu->len = 0; /* clear for next process after consume */
+    return;
+}
+
+static int parse_FU_A_frag(const uint8_t *payload, size_t payload_len,
+                        uint32_t timestamp, nalu_buf_t *nalu)
+{
+    uint8_t fu_indicator;
+    uint8_t fu_header;
+    uint8_t nalu_header;
+    uint8_t start_bit;
+    uint8_t end_bit;
+
+    if (payload == NULL || payload_len < 2 || nalu == NULL) {
+        fprintf(stderr, "%s: bad parameters\n", __FUNCTION__);
+        return RTP_PARSE_ERROR;
+    }
+
+    fu_indicator    = payload[0];
+    fu_header       = payload[1];
+    nalu_header     = (fu_indicator & 0xE0) | (fu_header & 0x1F);
+    start_bit       = ((fu_header & 0x80) >> 7) & 0x01;
+    end_bit         = ((fu_header & 0x40) >> 6) & 0x01;
+
+    /* discard FU-Indicator and FU-Header */
+    payload += 2;
+    payload_len -= 2;
+
+    /* for below process: 
+     * if can't parse whole NALU, discard data in buffer */
+
+    if (start_bit) { /* first fragment */
+        if (nalu->len != 0) {
+            fprintf(stderr, "%s: start frag, but data left in buffer\n", __FUNCTION__);
+            nalu->len = 0; /* discard it */
+        }
+
+        /*
+         * for the timestamp consideration:
+         * a frame will use more then one NALUs, 
+         * but one NALU can't contain whole (or more) frame.
+         * FU-A means frags of NALU in diff RTP packet.
+         */
+        nalu->timestamp = timestamp; /* record new timestamp */
+
+        if (add_nalu_data(nalu, &nalu_header, sizeof(nalu_header)) != 0) {
+            fprintf(stderr, "%s: add NALU header error\n", __FUNCTION__);
+            return RTP_PARSE_ERROR;
+        }
+
+        if (add_nalu_data(nalu, payload, payload_len) != 0) {
+            fprintf(stderr, "%s: add NALU data error\n", __FUNCTION__);
+            return RTP_PARSE_ERROR;
+        }
+
+        /* wait for next fragment */
+        return EAGAIN;
+    } else { /* middle or last fragment */
+        if (nalu->len == 0) {
+            fprintf(stderr, "%s: end frag, but no data in buffer\n", __FUNCTION__);
+            return RTP_PARSE_ERROR;
+        }
+
+        /* some data already received, then check the timestamp */
+        if (nalu->timestamp != timestamp) {
+            fprintf(stderr, "%s: timestamp not same (between end-frag and before)\n", __FUNCTION__);
+            return RTP_PARSE_ERROR;
+        }
+
+        /* nothing strange */
+        if (add_nalu_data(nalu, payload, payload_len) != 0) {
+            fprintf(stderr, "%s: add NALU data error\n", __FUNCTION__);
+            return RTP_PARSE_ERROR;
+        }
+
+        if (end_bit) {
+            /* now whole NALU received, we report ok */
+            return RTP_FILL_OK;
+        } else {
+            /* wait for next fragment */
+            return EAGAIN;
+        }
+    }
+
+    fprintf(stderr, "%s: oops, how could you got here!?\n", __FUNCTION__);
+    return RTP_PARSE_ERROR;
+}
+
+static int h264_init_parser(rtp_session *rtp_sess, unsigned int pt)
+{
+    rtp_h264_t *rtp_h264;
+    rtp_pt_attrs *attrs = &rtp_sess->ptdefs[pt]->attrs;
+    int i, len;
+    char value[1024];
+
+    if ((rtp_h264 = calloc(1, sizeof(rtp_h264_t))) == NULL) {
+        nms_printf(NMSML_ERR, "%s: no memory!\n", __FUNCTION__);
+        return RTP_ERRALLOC;
+    }
+
+    /* process SDP attributes */
+    for (i = 0; i < attrs->size; i++) {
+        /* profile-level-id */
+        if ((len = nms_get_attr_value(attrs->data[i], 
+                        "profile-level-id", value, sizeof(value))) > 0 ) {
+            if (len != 6) {
+                nms_printf(NMSML_ERR, "%s: invalid profile-level-id\n", __FUNCTION__);
+                //free(rtp_h264);
+                //return RTP_PARSE_ERROR;
+                continue; /* not fatal error */
+            }
+
+            nms_printf(NMSML_DBG1, "profile-level-id: %s\n", value);
+            continue;
+        }
+
+        /* packetization mode */
+        if ((len = nms_get_attr_value(attrs->data[i], 
+                        "packetization-mode", value, sizeof(value))) > 0 ) {
+            /* only support 0 and 1 */
+            if (len != 1 || atoi(value) >= 2) {
+                nms_printf(NMSML_ERR, "%s: packetization-mode %s is not support\n", __FUNCTION__, value);
+                free(rtp_h264);
+                return RTP_PARSE_ERROR;
+            }
+
+            nms_printf(NMSML_DBG1, "packetization-mode: %s\n", value);
+            continue;
+        }
+
+        /* sprop-parameter-sets (SPS/PPS) */
+        if ((len = nms_get_attr_value(attrs->data[i],
+                        "sprop-parameter-sets", value, sizeof(value))) > 0) {
+#if 1
+            //shamelessly ripped from ffmpeg
+            uint8_t start_seq[4] = {0, 0, 0, 1};
+            char *v = value;
+            rtp_h264->conf_len = 0;
+            rtp_h264->conf = NULL;
+            while (*v) {
+                char base64packet[1024];
+                uint8_t decoded_packet[1024];
+                unsigned packet_size;
+                char *dst = base64packet;
+
+                while (*v && *v != ','
+                        && (dst - base64packet) < sizeof(base64packet) - 1) {
+                    *dst++ = *v++;
+                }
+                *dst++ = '\0';
+
+                if (*v == ',')
+                    v++;
+
+                packet_size = nms_base64_decode(decoded_packet,
+                        base64packet,
+                        sizeof(decoded_packet));
+                if (packet_size) {
+                    uint8_t *dest = calloc(1, packet_size +
+                            sizeof(start_seq) +
+                            rtp_h264->conf_len);
+                    if (dest) {
+                        if (rtp_h264->conf_len) {
+                            memcpy(dest, rtp_h264->conf, rtp_h264->conf_len);
+                            free(rtp_h264->conf);
+                        }
+
+                        memcpy(dest+rtp_h264->conf_len, start_seq,
+                                sizeof(start_seq));
+                        memcpy(dest + rtp_h264->conf_len +  sizeof(start_seq),
+                                decoded_packet, packet_size);
+
+                        rtp_h264->conf = dest;
+                        rtp_h264->conf_len += sizeof(start_seq) + packet_size;
+                    } else {
+                        free(rtp_h264);
+                        return RTP_ERRALLOC;
+                    }
+                }
+            }
+#else
+            if (parse_sps_pps(value, &rtp_h264->conf, &rtp_h264->conf_len) != 0) {
+                nms_printf(NMSML_ERR, "%s: parse SPS/PPS error\n", __FUNCTION__);
+                free(rtp_h264);
+                return RTP_PARSE_ERROR;
+            }
+
+            nms_printf(NMSML_DBG1, "SPS/PPS parsed from: %s\n", value);
+            continue;
+#endif
+        }
+    }
+
+    rtp_sess->ptdefs[pt]->priv = (char *)rtp_h264;
+    return 0;
+}
+
+static int h264_uninit_parser(rtp_ssrc *ssrc, unsigned int pt)
+{
+    rtp_h264_t *rtp_h264 = (rtp_h264_t *)ssrc->rtp_sess->ptdefs[pt]->priv;
+
+    if (rtp_h264 != NULL) {
+        if (rtp_h264->nalu.data != NULL)
+            free(rtp_h264->nalu.data);
+
+        if (rtp_h264->conf != NULL)
+            free(rtp_h264->conf);
+
+        free(rtp_h264);
+    }
+
+    ssrc->rtp_sess->ptdefs[pt]->priv = NULL;
+    return 0;
+}
+
+static int h264_parse(rtp_ssrc *ssrc, rtp_frame *frame, rtp_buff *conf)
+{
+    rtp_h264_t *rtp_h264 = (rtp_h264_t *)ssrc->rtp_sess->ptdefs[frame->pt]->priv;
+    rtp_pkt *pkt;
+    size_t pkt_len, payload_len;
+    uint8_t *payload;
+    uint8_t type;
+    int err = RTP_FILL_OK;
+
+    if (ssrc == NULL || frame == NULL || conf == NULL) {
+        nms_printf(NMSML_ERR, "%s: bad parameters\n", __FUNCTION__);
+        return RTP_IN_PRM_ERR;
+    }
+
+    if ((pkt = rtp_get_pkt(ssrc, &pkt_len)) == NULL) {
+        return RTP_BUFF_EMPTY;
+    }
+
+    payload = RTP_PKT_DATA(pkt);
+    payload_len = RTP_PAYLOAD_SIZE(pkt, pkt_len);
+    if (payload_len < 3) { // 3 is a arbitary number
+        nms_printf(NMSML_ERR, "%s: packet too small\n", __FUNCTION__);
+        rtp_rm_pkt(ssrc);
+        return RTP_PARSE_ERROR;
+    }
+    type = (payload[0] & 0x1F);
+    if (type >= 1 && type <= 23)
+        type = 1; /* they are same: single NALU a packet */
+
+#if 1
+    {
+        static int configured = 0;
+        // In order to produce a compliant bitstream, a PPS NALU should prefix
+        // the data stream.
+        if (!configured && rtp_h264->conf_len) {
+                if (nms_alloc_data(&rtp_h264->nalu.data, 
+                            &rtp_h264->nalu.alloc_size, rtp_h264->conf_len)) {
+                        return RTP_ERRALLOC;
+                }
+                nms_append_incr(rtp_h264->nalu.data, &rtp_h264->nalu.len, 
+                        rtp_h264->conf, rtp_h264->conf_len);
+                configured = 1;
+        }
+    }
+#endif
+
+    /* output PPS/SPS info */
+    if (rtp_h264->conf != NULL && rtp_h264->conf_len > 0) {
+        conf->data = rtp_h264->conf;
+        conf->len = rtp_h264->conf_len;
+    }
+
+    switch (type) {
+        case 0:
+            err = RTP_PKT_UNKNOWN;
+            break;
+
+        case 1:     /* 1~23, only one NAL unit in each packet. */
+            if (rtp_h264->nalu.len != 0) {
+                fprintf(stderr, "%s: has data in nalu buf before new NALU!!\n", __FUNCTION__);
+                rtp_h264->nalu.len = 0; // discard it
+            }
+
+            /* save the NALU */
+            if (add_nalu_data(&rtp_h264->nalu, payload, payload_len) != 0) {
+                fprintf(stderr, "%s: fail to save signal NALU!!\n", __FUNCTION__);
+                err = RTP_PARSE_ERROR;
+                break;
+            }
+
+            consume_nalu(&rtp_h264->nalu, frame);
+            break;
+
+        case 24:    /* STAP-A (aggregate, and not interleaving) */
+            err = RTP_PKT_UNKNOWN;
+            nms_printf(NMSML_WARN, "%s: STAP-B is not support now!\n", __FUNCTION__);
+            break;
+
+        case 25:    /* STAP-B (aggregate, and interleaving) */
+            err = RTP_PKT_UNKNOWN;
+            nms_printf(NMSML_WARN, "%s: STAP-B is not support now!\n", __FUNCTION__);
+            break;
+
+        case 26:    /* MTAP-16 */
+            err = RTP_PKT_UNKNOWN;
+            nms_printf(NMSML_WARN, "%s: MTAP-16 is not support now!\n", __FUNCTION__);
+            break;
+
+        case 27:    /* MTAP-24 */
+            err = RTP_PKT_UNKNOWN;
+            nms_printf(NMSML_WARN, "%s: MTAP-24 is not support now!\n", __FUNCTION__);
+            break;
+
+        case 28:    /* FU-A (fragmental nal, and not interleaving) */
+            err = parse_FU_A_frag(payload, payload_len, RTP_PKT_TS(pkt), &rtp_h264->nalu);
+            if (err == RTP_FILL_OK) {
+                consume_nalu(&rtp_h264->nalu, frame);
+            }
+            break;
+
+        case 29:    /* FU-B */
+            err = RTP_PKT_UNKNOWN;
+            nms_printf(NMSML_WARN, "%s: FU-B is not support now!\n", __FUNCTION__);
+            break;
+
+        case 30:    /* undef */
+        case 31:    /* undef */
+        default:
+            err = RTP_PKT_UNKNOWN;
+            break;
+    }
+
+    rtp_rm_pkt(ssrc);
+
+    if (err != RTP_FILL_OK && err != EAGAIN)
+        nms_printf(NMSML_ERR, "%s: error: %d\n", __FUNCTION__, err);
+
+    return err;
+}
+
+RTP_PARSER_FULL(h264);

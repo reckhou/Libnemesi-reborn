@@ -1,0 +1,26 @@
++ Netembryo changelog
+
+  28 Dec 2007; Luca Barbato <lu_zero@gentoo.org>: netembryo-0.0.5:
+  Released
+
+  24 Dec 2007; Luca Barbato <lu_zero@gentoo.org>: netembryo-0.0.4:
+  Fix a corner case causing security issues, as reported by L. Auriemma
+
+  07 Nov 2007; Luca Barbato <lu_zero@gentoo.org>: netembryo-0.0.4:
+  Released
+
+  06 Nov 2007; Luca Barbato <lu_zero@gentoo.org>: netembryo-0.0.4:
+  BSD/KAME compatibile. (tested on freebsd 7.0)
+
+  10 Jul 2007; Luca Barbato <lu_zero@gentoo.org>: netembryo-0.0.3:
+  Released
+
+  02 Jul 2007; Luca Barbato <lu_zero@gentoo.org> netembryo-0.0.3:
+  Improved logging function. GPL -> LGPL
+
+  20 Jun 2007; Alessandro Molina <amol.wrk@gmail.com> netembryo-0.0.2:
+  Common RTSP error number to string translation.
+
+  31 May 2007; Luca Barbato <lu_zero@gentoo.org> netembryo-0.0.1:
+  First release
+

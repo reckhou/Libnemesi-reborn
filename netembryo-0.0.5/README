@@ -1,0 +1,10 @@
+Netembryo - tiny network abstraction
+
++ What is netembryo?
+
+Netembryo is a collection of function, ranging from the network abstraction to
+the url string parsing, useful for implementing rtp and rtsp applications.
+
+Currently the network wrapper (wsocket or wrapped socket) provides support for TCP, UDP and SCTP.
+
+Please refer to the Doxygenerated documentation for usage.
